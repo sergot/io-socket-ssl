@@ -1,0 +1,7 @@
+{
+    "name"      : "IO::Socket:SSL",
+    "version"   : "*",
+    "description"   : "IO::Socket::SSL",
+    "depends"   : ["OpenSSL"],
+    "source-url"    : "git://github.com/sergot/io-socket-ssl.git"
+}
