@@ -1,5 +1,6 @@
 use IO::Socket::SSL;
 
 my $sock = IO::Socket::SSL.new(:host<filip.sergot.pl>, :port(443));
-$sock.send("GET / HTTP/1.1\r\n\r\n");
-say $sock.recv(5);
+$sock.initialize;
+$sock.send("GET / HTTP/1.1\r\nHost: filip.sergot.pl\r\n\r\n");
+say 'Response: ', $sock.recv(100);
