@@ -20,9 +20,9 @@ has Int $.port = 80;
 has Str $.localhost;
 has Int $.localport;
 has Bool $.listen;
-has $.family = PIO::PF_INET;
-has $.proto = PIO::PROTO_TCP;
-has $.type = PIO::SOCK_STREAM;
+#has $.family = PIO::PF_INET;
+#has $.proto = PIO::PROTO_TCP;
+#has $.type = PIO::SOCK_STREAM;
 has Str $.input-line-separator is rw = "\n";
 has Int $.ins = 0;
 
