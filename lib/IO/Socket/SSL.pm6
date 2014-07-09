@@ -35,21 +35,29 @@ submethod BUILD() {
 
 method !initialize {
     if $.host && $.port {
+        # client stuff
         my int32 $port = $.port;
         $.fd = client_connect($.host, $port);
 
         if $.fd > 0 {
             $.ssl = OpenSSL.new;
             $.ssl.set-fd($.fd);
+            $.ssl.set-connect-state;
         }
+    }
+    elsif $.localhost && $.localport {
+        # server stuff TODO
+        $.ssl = OpenSSL.new;
+        $.ssl.set-fd($.fd);
+        $.ssl.set-accept-state;
     }
     self;
 }
 
-method recv() {
-    ...
+method recv(Int $n, Bool :$bin = False) {
+    $.ssl.read($n, :$bin);
 }
 
-method send() {
-    ...
+method send(Str $s) {
+    $.ssl.write($s);
 }
