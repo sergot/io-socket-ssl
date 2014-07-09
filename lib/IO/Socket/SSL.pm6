@@ -27,11 +27,10 @@ has Str $.input-line-separator is rw = "\n";
 has Int $.ins = 0;
 
 has int32 $.fd;
-has OpenSSL::SSL_CTX $.ctx;
-has OpenSSL::SSL $.ssl;
+has OpenSSL $.ssl;
 
-method new() {
-    ...
+submethod BUILD() {
+    self!initialize;
 }
 
 method !initialize {
@@ -40,14 +39,8 @@ method !initialize {
         $.fd = client_connect($.host, $port);
 
         if $.fd > 0 {
-            # do some SSL here
-            OpenSSL::SSL_library_init();
-            OpenSSL::SSL_load_error_strings();
-            $.ctx = OpenSSL::SSL_CTX_new( OpenSSL::SSLv23_client_method() );
-            $.ssl = OpenSSL::SSL_new($.ctx);
-            OpenSSL::SSL_set_connect_state($.ssl);
-            OpenSSL::SSL_set_fd($.ssl, $.fd);
-            OpenSSL::SSL_connect($.ssl);
+            $.ssl = OpenSSL.new;
+            $.ssl.set-fd($.fd);
         }
     }
     self;
