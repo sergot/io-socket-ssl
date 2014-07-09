@@ -29,27 +29,25 @@ has Int $.ins = 0;
 has int32 $.fd;
 has OpenSSL $.ssl;
 
-submethod BUILD() {
-    self!initialize;
-}
-
-method !initialize {
-    if $.host && $.port {
+method initialize {
+    if $!host && $!port {
         # client stuff
         my int32 $port = $.port;
-        $.fd = client_connect($.host, $port);
+        $!fd = client_connect(str-to-carray($!host), $port);
 
-        if $.fd > 0 {
-            $.ssl = OpenSSL.new;
-            $.ssl.set-fd($.fd);
-            $.ssl.set-connect-state;
+        if $!fd > 0 {
+            # handle errors
+            $!ssl = OpenSSL.new(:client);
+            $!ssl.set-fd($.fd);
+            $!ssl.set-connect-state;
+            $!ssl.connect;
         }
     }
-    elsif $.localhost && $.localport {
+    elsif $!localhost && $!localport {
         # server stuff TODO
-        $.ssl = OpenSSL.new;
-        $.ssl.set-fd($.fd);
-        $.ssl.set-accept-state;
+        $!ssl = OpenSSL.new;
+        $!ssl.set-fd($.fd);
+        $!ssl.set-accept-state;
     }
     self;
 }
@@ -60,4 +58,14 @@ method recv(Int $n, Bool :$bin = False) {
 
 method send(Str $s) {
     $.ssl.write($s);
+}
+
+sub str-to-carray(Str $s) {
+    my @s = $s.split('');
+    my $c = CArray[uint8].new;
+    for 0 ..^ $s.chars -> $i {
+        my uint8 $elem = @s[$i].ord;
+        $c[$i] = $elem;
+    }
+    $c;
 }
