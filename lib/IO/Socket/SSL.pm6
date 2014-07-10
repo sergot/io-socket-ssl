@@ -29,7 +29,34 @@ has Int $.ins = 0;
 has int32 $.fd;
 has OpenSSL $.ssl;
 
-method initialize {
+method new(*%args) {
+    fail "Nothing given for new socket to connect or bind to" unless %args<host> || %args<listen>;
+
+    if %args<host> {
+        my ($host, $port) = %args<family> && %args<family> == PIO::PF_INET6()
+            ?? v6-split(%args<host>)
+            !! v4-split(%args<host>);
+        if $port {
+            %args<port> //= $port;
+            %args<host> = $host;
+        }
+    }
+    if %args<localhost> {
+        my ($peer, $port) = %args<family> && %args<family> == PIO::PF_INET6()
+            ?? v6-split(%args<localhost>)
+            !! v4-split(%args<localhost>);
+        if $port {
+            %args<localport> //= $port;
+            %args<localhost> = $peer;
+        }
+    }
+
+    %args<listen>.=Bool if %args.exists_key('listen');
+
+    self.bless(|%args)!initialize;
+}
+
+method !initialize {
     if $!host && $!port {
         # client stuff
         my int32 $port = $.port;
