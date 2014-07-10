@@ -4,6 +4,7 @@ use NativeCall;
 use OpenSSL;
 
 sub client_connect(CArray[uint8], int32) returns int32 is native('./libclient') { * }
+sub client_disconnect(int32) is native('./libclient') { * }
 
 sub v4-split($uri) {
     $uri.split(':', 2);
@@ -84,6 +85,11 @@ method recv(Int $n = 1048576, Bool :$bin = False) {
 
 method send(Str $s) {
     $.ssl.write($s);
+}
+
+method close {
+    $.ssl.close;
+    client_disconnect($.fd);
 }
 
 sub str-to-carray(Str $s) {
