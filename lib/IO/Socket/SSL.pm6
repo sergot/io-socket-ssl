@@ -79,7 +79,7 @@ method !initialize {
     self;
 }
 
-method recv(Int $n, Bool :$bin = False) {
+method recv(Int $n = 1048576, Bool :$bin = False) {
     $.ssl.read($n, :$bin);
 }
 
