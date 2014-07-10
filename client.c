@@ -32,7 +32,3 @@ int client_connect(char *hostname, int port) {
 void client_disconnect(int fd) {
     close(fd);
 }
-
-char *get_buff(int n) {
-    return (char *) malloc(n * sizeof(char));
-}

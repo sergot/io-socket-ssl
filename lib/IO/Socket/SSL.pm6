@@ -4,7 +4,6 @@ use NativeCall;
 use OpenSSL;
 
 my sub client_connect(CArray[uint8], int32) returns int32 is native('./libclient') { * }
-my sub get_buff(int32) returns CArray[uint8] is native('./libclient')              { * }
 
 my sub v4-split($uri) {
     $uri.split(':', 2);
