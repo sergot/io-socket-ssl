@@ -59,13 +59,13 @@ method new(*%args) {
 method !initialize {
     if $!host && $!port {
         # client stuff
-        my int32 $port = $.port;
+        my int32 $port = $!port;
         $!fd = client_connect(str-to-carray($!host), $port);
 
         if $!fd > 0 {
             # handle errors
             $!ssl = OpenSSL.new(:client);
-            $!ssl.set-fd($.fd);
+            $!ssl.set-fd($!fd);
             $!ssl.set-connect-state;
             $!ssl.connect;
         }
@@ -73,23 +73,23 @@ method !initialize {
     elsif $!localhost && $!localport {
         # server stuff TODO
         $!ssl = OpenSSL.new;
-        $!ssl.set-fd($.fd);
+        $!ssl.set-fd($!fd);
         $!ssl.set-accept-state;
     }
     self;
 }
 
 method recv(Int $n = 1048576, Bool :$bin = False) {
-    $.ssl.read($n, :$bin);
+    $!ssl.read($n, :$bin);
 }
 
 method send(Str $s) {
-    $.ssl.write($s);
+    $!ssl.write($s);
 }
 
 method close {
-    $.ssl.close;
-    client_disconnect($.fd);
+    $!ssl.close;
+    client_disconnect($!fd);
 }
 
 sub str-to-carray(Str $s) {
