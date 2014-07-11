@@ -5,26 +5,37 @@
 #include <unistd.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 int client_connect(char *hostname, int port) {
     int error, handle;
-    struct hostent *host;
-    struct sockaddr_in server;
+    struct addrinfo hints, *servinfo, *p;
+    char PORT[5]; // max port number is 65535
+    snprintf(PORT, 5, "%d", port);
 
-    host = gethostbyname(hostname);
-    if( (handle = socket(AF_INET, SOCK_STREAM, 0)) == -1 ) {
-        handle = 0;
-    }
-    else {
-        server.sin_family = AF_INET;
-        server.sin_port = htons(port);
-        server.sin_addr = *((struct in_addr *) host->h_addr);
-        bzero( &(server.sin_zero), 8 );
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
 
-        if( connect(handle, (struct sockaddr *) &server, sizeof(struct sockaddr)) == -1 ) {
-            handle = 0;
+    if( getaddrinfo(hostname, "443", &hints, &servinfo) != 0 )
+        return 0;
+
+    for(p = servinfo; p != NULL; p = p->ai_next) {
+        if((handle = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1)
+            continue;
+
+        if( connect(handle, p->ai_addr, p->ai_addrlen) == -1 ) {
+            close(handle);
+            continue;
         }
+
+        break;
     }
+
+    if (p == NULL)
+        return 0;
+
+    freeaddrinfo(servinfo);
 
     return handle;
 }
