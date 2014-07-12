@@ -2,6 +2,6 @@
     "name"      : "IO::Socket:SSL",
     "version"   : "*",
     "description"   : "IO::Socket::SSL",
-    "depends"   : ["OpenSSL", "NativeCall"],
+    "depends"   : ["OpenSSL", "NativeCall", "LibraryMake"],
     "source-url"    : "git://github.com/sergot/io-socket-ssl.git"
 }

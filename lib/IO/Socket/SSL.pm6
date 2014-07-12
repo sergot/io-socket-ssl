@@ -3,8 +3,10 @@ class IO::Socket::SSL;
 use NativeCall;
 use OpenSSL;
 
-sub client_connect(CArray[uint8], int32) returns int32 is native('./libclient') { * }
-sub client_disconnect(int32) is native('./libclient') { * }
+use libclient;
+
+sub client_connect(CArray[uint8], int32) returns int32 is native(libclient::library) { * }
+sub client_disconnect(int32) is native(libclient::library) { * }
 
 sub v4-split($uri) {
     $uri.split(':', 2);
