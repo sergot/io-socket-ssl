@@ -5,8 +5,10 @@ use OpenSSL;
 
 use libclient;
 
-sub client_connect(CArray[uint8], int32) returns int32 is native(libclient::library) { * }
-sub client_disconnect(int32) is native(libclient::library) { * }
+sub client_connect(CArray[uint8], int32) returns int32 { * }
+sub client_disconnect(int32) { * }
+trait_mod:<is>(&client_connect, :native(libclient::library));
+trait_mod:<is>(&client_disconnect, :native(libclient::library));
 
 sub v4-split($uri) {
     $uri.split(':', 2);
