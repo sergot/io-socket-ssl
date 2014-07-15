@@ -1,5 +1,5 @@
 {
-    "name"      : "IO::Socket:SSL",
+    "name"      : "IO::Socket::SSL",
     "version"   : "*",
     "author"    : "github:sergot",
     "description"   : "IO::Socket::SSL",
