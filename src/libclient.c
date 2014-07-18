@@ -10,14 +10,14 @@
 int client_connect(char *hostname, int port) {
     int error, handle;
     struct addrinfo hints, *servinfo, *p;
-    char PORT[5]; // max port number is 65535
-    snprintf(PORT, 5, "%d", port);
+    char PORT[6]; // max port number is 65535 + \0
+    snprintf(PORT, 6, "%d", port);
 
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
 
-    if( getaddrinfo(hostname, "443", &hints, &servinfo) != 0 )
+    if( getaddrinfo(hostname, PORT, &hints, &servinfo) != 0 )
         return 0;
 
     for(p = servinfo; p != NULL; p = p->ai_next) {
