@@ -5,7 +5,7 @@ use OpenSSL;
 
 use libclient;
 
-sub client_connect(CArray[uint8], int32) returns int32 { * }
+sub client_connect(Str, int32) returns int32 { * }
 sub client_disconnect(int32) { * }
 trait_mod:<is>(&client_connect, :native(libclient::library));
 trait_mod:<is>(&client_disconnect, :native(libclient::library));
@@ -64,7 +64,7 @@ method !initialize {
     if $!host && $!port {
         # client stuff
         my int32 $port = $!port;
-        $!fd = client_connect(str-to-carray($!host), $port);
+        $!fd = client_connect($!host, $port);
 
         if $!fd > 0 {
             # handle errors
