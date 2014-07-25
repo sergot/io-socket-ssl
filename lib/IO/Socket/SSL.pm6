@@ -33,7 +33,7 @@ has Int $.ins = 0;
 has int32 $.fd;
 has OpenSSL $.ssl;
 
-method new(*%args) {
+method new(*%args is copy) {
     fail "Nothing given for new socket to connect or bind to" unless %args<host> || %args<listen>;
 
     if %args<host> {
