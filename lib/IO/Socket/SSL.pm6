@@ -108,6 +108,10 @@ method send(Str $s) {
     $!ssl.write($s);
 }
 
+method accept {
+    $!ssl.accept;
+}
+
 method close {
     $!ssl.close;
     client_disconnect($!fd);
