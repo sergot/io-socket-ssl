@@ -7,8 +7,10 @@ use libclient;
 
 sub client_connect(Str, int32) returns int32 { * }
 sub client_disconnect(int32) { * }
+sub server_init(int32, int32, Str) returns int32 { * }
 trait_mod:<is>(&client_connect, :native(libclient::library));
 trait_mod:<is>(&client_disconnect, :native(libclient::library));
+trait_mod:<is>(&server_init, :native(libclient::library));
 
 sub v4-split($uri) {
     $uri.split(':', 2);
@@ -23,6 +25,7 @@ has Str $.host;
 has Int $.port = 80;
 has Str $.localhost;
 has Int $.localport;
+has Str $.certfile;
 has Bool $.listen;
 #has $.family = PIO::PF_INET;
 #has $.proto = PIO::PROTO_TCP;
@@ -78,10 +81,21 @@ method !initialize {
         }
     }
     elsif $!localhost && $!localport {
-        # server stuff TODO
-        $!ssl = OpenSSL.new;
-        $!ssl.set-fd($!fd);
-        $!ssl.set-accept-state;
+        my int32 $listen = $!listen.Int // 0;
+        $!fd = server_init($!localport, $listen, $!certfile);
+        if $!fd > 0 {
+            $!ssl = OpenSSL.new;
+            $!ssl.set-fd($!fd);
+            $!ssl.set-accept-state;
+
+            die "No certificate file given" unless $!certfile;
+            $!ssl.use-certificate-file($!certfile);
+            $!ssl.use-privatekey-file($!certfile);
+            $!ssl.check-private-key;
+        }
+        else {
+            die "Failed to " ~ ($!fd == -1 ?? "bind" !! "listen");
+        }
     }
     self;
 }

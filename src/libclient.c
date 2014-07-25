@@ -40,6 +40,30 @@ int client_connect(char *hostname, int port) {
     return handle;
 }
 
+int server_init(int port, int if_listen, char *cert) {
+    struct addrinfo hints, *res;
+    int handle;
+    char PORT[6]; // max port number is 65535 + \0
+    snprintf(PORT, 6, "%d", port);
+
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags = AI_PASSIVE;
+
+    getaddrinfo(NULL, PORT, &hints, &res);
+
+    handle = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+
+    if( bind(handle, res->ai_addr, res->ai_addrlen) != 0 )
+        return -1;
+
+    if( if_listen && (listen(handle, 10) != 0) )
+        return 0;
+
+    return handle;
+}
+
 void client_disconnect(int fd) {
     close(fd);
 }
