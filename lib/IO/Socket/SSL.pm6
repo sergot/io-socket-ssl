@@ -95,13 +95,3 @@ method close {
     $!ssl.close;
     client_disconnect($!fd);
 }
-
-sub str-to-carray(Str $s) {
-    my @s = $s.split('');
-    my $c = CArray[uint8].new;
-    for 0 ..^ $s.chars -> $i {
-        my uint8 $elem = @s[$i].ord;
-        $c[$i] = $elem;
-    }
-    $c;
-}
