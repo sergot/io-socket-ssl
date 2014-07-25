@@ -73,6 +73,9 @@ method !initialize {
             $!ssl.set-connect-state;
             $!ssl.connect;
         }
+        else {
+            die "Failed to connect";
+        }
     }
     elsif $!localhost && $!localport {
         # server stuff TODO
