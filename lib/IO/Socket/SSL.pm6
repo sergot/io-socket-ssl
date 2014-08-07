@@ -116,3 +116,51 @@ method close {
     $!ssl.close;
     client_disconnect($!fd);
 }
+
+=begin pod
+
+=head1 NAME
+
+IO::Socket::SSL - interface for SSL connection
+
+=head1 SYNOPSIS
+
+    use IO::Socket::SSL;
+    my $ssl = IO::Socket::SSL.new(:host<example.com>, :port(443));
+    if $ssl.send("GET / HTTP/1.1\r\n\r\n") {
+        say $ssl.recv;
+    }
+
+=head1 DESCRIPTION
+
+TODO
+
+=head1 METHODS
+
+=head2 method recv
+
+    method recv(IO::Socket::SSL:, Int $n = 1048576, Bool :$bin = False)
+
+=head2 method send
+
+    method send(IO::Socket::SSL:, Str $s)
+
+=head2 method accept
+
+    method accept(IO::Socket::SSL:)
+
+=head2 close
+
+    method close(IO::Socket::SSL:)
+
+=head1 SEE ALSO
+
+L<OpenSSL>
+
+=head1 AUTHOR
+
+Filip Sergot (sergot)
+Website: filip.sergot.pl
+Contact: filip (at) sergot.pl
+
+=end pod
