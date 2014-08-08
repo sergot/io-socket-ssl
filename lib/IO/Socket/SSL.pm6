@@ -133,7 +133,9 @@ IO::Socket::SSL - interface for SSL connection
 
 =head1 DESCRIPTION
 
-TODO
+This module provides an interface for SSL connections.
+
+It uses C to setting up the connection so far (hope it will change soon).
 
 =head1 METHODS
 
@@ -141,17 +143,27 @@ TODO
 
     method recv(IO::Socket::SSL:, Int $n = 1048576, Bool :$bin = False)
 
+Reads $n bytes from the other side (server/client).
+
+Bool :$bin if we want it to return Buf instead of Str.
+
 =head2 method send
 
     method send(IO::Socket::SSL:, Str $s)
+
+Sends $s to the other side (server/client).
 
 =head2 method accept
 
     method accept(IO::Socket::SSL:)
 
+Waits for a new incoming connection and accepts it.
+
 =head2 close
 
     method close(IO::Socket::SSL:)
+
+Closes the connection.
 
 =head1 SEE ALSO
 
