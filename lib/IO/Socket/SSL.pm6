@@ -169,10 +169,17 @@ Closes the connection.
 
 L<OpenSSL>
 
-=head1 AUTHOR
+=head1 EXAMPLE
 
-Filip Sergot (sergot)
-Website: filip.sergot.pl
-Contact: filip (at) sergot.pl
+To download sourcecode of e.g. github.com:
+
+    use IO::Socket::SSL;
+    my $ssl = IO::Socket::SSL.new(:host<github.com>, :port(443));
+    my $content = Buf.new;
+    $ssl.send("GET /\r\n\r\n");
+    while my $read = $ssl.recv {
+        $content ~= $read;
+    }
+    say $content;
 
 =end pod
