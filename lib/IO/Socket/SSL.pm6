@@ -139,6 +139,25 @@ It uses C to setting up the connection so far (hope it will change soon).
 
 =head1 METHODS
 
+=head2 method new
+
+    method new(*%params) returns IO::Socket::SSL
+
+Gets params like:
+
+=item encoding             : connection's encoding
+=item input-line-separator : specifies how lines of input are separated
+
+for client state:
+=item host : host to connect
+=item port : port to connect
+
+for server state:
+=item localhost : host to use for the server
+=item localport : port for the server
+=item listen    : create a server and listen for a new incoming connection
+=item certfile  : path to a file with certificates
+
 =head2 method recv
 
     method recv(IO::Socket::SSL:, Int $n = 1048576, Bool :$bin = False)
