@@ -2,6 +2,8 @@ class IO::Socket::SSL;
 
 use NativeCall;
 use OpenSSL;
+use OpenSSL::SSL;
+use OpenSSL::Err;
 
 use libclient;
 
@@ -74,7 +76,15 @@ method !initialize {
             $!ssl = OpenSSL.new(:client);
             $!ssl.set-fd($!fd);
             $!ssl.set-connect-state;
-            $!ssl.connect;
+            my $ret = $!ssl.connect;
+            if $ret < 0 {
+                my $e = OpenSSL::Err::ERR_get_error();
+                repeat {
+                    say "err code: $e";
+                    say OpenSSL::Err::ERR_error_string($e);
+                   $e = OpenSSL::Err::ERR_get_error();
+                } while $e != 0 && $e != 4294967296;
+            }
         }
         else {
             die "Failed to connect";
