@@ -7,9 +7,9 @@ use OpenSSL::Err;
 
 use libclient;
 
-sub client_connect(Str, int32) returns int32 { * }
-sub client_disconnect(int32) { * }
-sub server_init(int32, int32, Str) returns int32 { * }
+sub client_connect(Str, int32) returns int32 { ... }
+sub client_disconnect(int32) { ... }
+sub server_init(int32, int32, Str) returns int32 { ... }
 trait_mod:<is>(&client_connect, :native(libclient::library));
 trait_mod:<is>(&client_disconnect, :native(libclient::library));
 trait_mod:<is>(&server_init, :native(libclient::library));
