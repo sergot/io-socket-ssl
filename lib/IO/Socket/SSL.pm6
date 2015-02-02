@@ -1,18 +1,7 @@
 class IO::Socket::SSL;
 
-use NativeCall;
 use OpenSSL;
-use OpenSSL::SSL;
 use OpenSSL::Err;
-
-use libclient;
-
-sub client_connect(Str, int32) returns int32 { ... }
-sub client_disconnect(int32) { ... }
-sub server_init(int32, int32, Str) returns int32 { ... }
-trait_mod:<is>(&client_connect, :native(libclient::library));
-trait_mod:<is>(&client_disconnect, :native(libclient::library));
-trait_mod:<is>(&server_init, :native(libclient::library));
 
 sub v4-split($uri) {
     $uri.split(':', 2);
@@ -29,13 +18,13 @@ has Str $.localhost;
 has Int $.localport;
 has Str $.certfile;
 has Bool $.listen;
-#has $.family = PIO::PF_INET;
-#has $.proto = PIO::PROTO_TCP;
-#has $.type = PIO::SOCK_STREAM;
 has Str $.input-line-separator is rw = "\n";
 has Int $.ins = 0;
 
-has int32 $.fd;
+has $.client-socket;
+has $.listen-socket;
+has $.accepted-socket;
+has $!socket;
 has OpenSSL $.ssl;
 
 method new(*%args is copy) {
@@ -66,46 +55,47 @@ method new(*%args is copy) {
 }
 
 method !initialize {
-    if $!host && $!port {
+    if $!client-socket || ($!host && $!port) {
         # client stuff
-        my int32 $port = $!port;
-        $!fd = client_connect($!host, $port);
+        $!socket = $!client-socket || IO::Socket::INET.new(:host($!host), :port($!port));
 
-        if $!fd > 0 {
-            # handle errors
-            $!ssl = OpenSSL.new(:client);
-            $!ssl.set-fd($!fd);
-            $!ssl.set-connect-state;
-            my $ret = $!ssl.connect;
-            if $ret < 0 {
-                my $e = OpenSSL::Err::ERR_get_error();
-                repeat {
-                    say "err code: $e";
-                    say OpenSSL::Err::ERR_error_string($e);
-                   $e = OpenSSL::Err::ERR_get_error();
-                } while $e != 0 && $e != 4294967296;
-            }
-        }
-        else {
-            die "Failed to connect";
+        # handle errors
+        $!ssl = OpenSSL.new(:client);
+        $!ssl.set-socket($!socket);
+        $!ssl.set-connect-state;
+        my $ret = $!ssl.connect;
+        if $ret < 0 {
+            my $e = OpenSSL::Err::ERR_get_error();
+            repeat {
+                say "err code: $e";
+                say OpenSSL::Err::ERR_error_string($e);
+               $e = OpenSSL::Err::ERR_get_error();
+            } while $e != 0 && $e != 4294967296;
         }
     }
-    elsif $!localhost && $!localport {
-        my int32 $listen = $!listen.Int // 0;
-        $!fd = server_init($!localport, $listen, $!certfile);
-        if $!fd > 0 {
-            $!ssl = OpenSSL.new;
-            $!ssl.set-fd($!fd);
-            $!ssl.set-accept-state;
-
-            die "No certificate file given" unless $!certfile;
-            $!ssl.use-certificate-file($!certfile);
-            $!ssl.use-privatekey-file($!certfile);
-            $!ssl.check-private-key;
+    elsif $!accepted-socket {
+        $!socket = $!accepted-socket;
+        
+        $!ssl = OpenSSL.new();
+        $!ssl.set-socket($!socket);
+        $!ssl.set-accept-state;
+        
+        $!ssl.use-certificate-file($!certfile);
+        $!ssl.use-privatekey-file($!certfile);
+        $!ssl.check-private-key;
+        
+        my $ret = $!ssl.accept;
+        if $ret < 0 {
+            my $e = OpenSSL::Err::ERR_get_error();
+            repeat {
+                say "err code: $e";
+                say OpenSSL::Err::ERR_error_string($e);
+               $e = OpenSSL::Err::ERR_get_error();
+            } while $e != 0 && $e != 4294967296;
         }
-        else {
-            die "Failed to " ~ ($!fd == -1 ?? "bind" !! "listen");
-        }
+    }
+    elsif $!listen-socket || $!listen {
+        $!socket = $!listen-socket || IO::Socket::INET.new(:localhost($!localhost), :localport($!localport), :listen);
     }
     self;
 }
@@ -119,12 +109,13 @@ method send(Str $s) {
 }
 
 method accept {
-    $!ssl.accept;
+    my $newsock = $!socket.accept;
+    self.bless(:accepted-socket($newsock))!initialize;
 }
 
 method close {
     $!ssl.close;
-    client_disconnect($!fd);
+    $!socket.close;
 }
 
 =begin pod
