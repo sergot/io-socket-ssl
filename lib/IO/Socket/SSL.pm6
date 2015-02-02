@@ -28,7 +28,11 @@ has $!socket;
 has OpenSSL $.ssl;
 
 method new(*%args is copy) {
-    fail "Nothing given for new socket to connect or bind to" unless %args<host> || %args<listen>;
+    fail "Nothing given for new socket to connect or bind to" unless %args<host>
+                                                                  || %args<listen>
+                                                                  || %args<client-socket>
+                                                                  || %args<accepted-socket>
+                                                                  || %args<listen-socket>;
 
     if %args<host> {
         my ($host, $port) = %args<family> && %args<family> == PIO::PF_INET6()
