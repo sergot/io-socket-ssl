@@ -112,6 +112,22 @@ method send(Str $s) {
     $!ssl.write($s);
 }
 
+method get() {
+    my $buf = buf8.new;
+    loop {
+        my $more = self.recv(1, :bin);
+        if !$more {
+            return Str unless $buf.bytes;
+            return $buf.decode;
+        }
+        $buf ~= $more;
+        my $str = $buf.decode;
+        if $str && $str.index($.input-line-separator) {
+            return $str.substr(0, $str.chars - $.input-line-separator.chars);
+        }
+    }
+}
+
 method accept {
     my $newsock = $!socket.accept;
     self.bless(:accepted-socket($newsock))!initialize;
