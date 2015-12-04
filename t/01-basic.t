@@ -2,7 +2,7 @@ use v6;
 use Test;
 use IO::Socket::SSL;
 
-plan 3;
+plan 2;
 
 my $ssl = IO::Socket::SSL.new(:host<github.com>, :port(443));
 isa-ok $ssl, IO::Socket::SSL, 'new 1/1';
