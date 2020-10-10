@@ -1,4 +1,4 @@
-unit class IO::Socket::SSL;
+unit class IO::Socket::SSL does IO::Socket;
 
 use OpenSSL;
 use OpenSSL::Err;
@@ -11,7 +11,6 @@ sub v6-split($uri) {
     $host ?? ($host, $port) !! $uri;
 }
 
-has Str $.encoding = 'utf8';
 has Str $.host;
 has Int $.port = 443;
 has Str $.localhost;
@@ -124,6 +123,10 @@ method send(Str $s) {
 
 method print(Str $s) {
     $!ssl.write($s);
+}
+
+method put(Str $s) {
+    $!ssl.write($s ~ $.nl-out);
 }
 
 method write(Blob $b) {
