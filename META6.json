@@ -1,11 +1,24 @@
 {
-    "perl"        : "6.*",
-    "name"        : "IO::Socket::SSL",
-    "version"     : "0.0.3",
-    "auth"        : "github:sergot",
-    "description" : "IO::Socket::SSL for Perl 6 using OpenSSL",
-    "depends"     : ["OpenSSL"],
-    "provides"    : { "IO::Socket::SSL" : "lib/IO/Socket/SSL.rakumod" },
-    "source-url"  : "git://github.com/sergot/io-socket-ssl.git",
-    "tags"        : [ "SSL", "Sockets" ]
+    "author": "github:sergot",
+    "description": "IO::Socket::SSL for Perl 6 using OpenSSL",
+    "depends": [
+        "OpenSSL"
+    ],
+    "name": "IO::Socket::SSL",
+    "perl": "6.*",
+    "provides": {
+        "IO::Socket::SSL" : "lib/IO/Socket/SSL.rakumod"
+    },
+    "source-url": "git://github.com/sergot/io-socket-ssl.git",
+    "support": {
+        "bugtracker": "https://github.com/sergot/io-socket-ssl/issues",
+        "source": "git://github.com/sergot/io-socket-ssl.git"
+    },
+    "tags": [
+        "SSL", "Sockets"
+    ],
+    "test-depends": [
+        "Test"
+    ],
+    "version": "0.0.3"
 }
