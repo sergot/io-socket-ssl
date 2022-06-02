@@ -1,5 +1,8 @@
 {
-    "author": "github:sergot",
+    "auth": "github:sergot",
+    "authors": [
+        "Filip Sergot"
+    ],
     "description": "IO::Socket::SSL for Perl 6 using OpenSSL",
     "depends": [
         "OpenSSL"
@@ -9,6 +12,7 @@
     "provides": {
         "IO::Socket::SSL" : "lib/IO/Socket/SSL.rakumod"
     },
+    "raku": "6.*",
     "source-url": "git://github.com/sergot/io-socket-ssl.git",
     "support": {
         "bugtracker": "https://github.com/sergot/io-socket-ssl/issues",
