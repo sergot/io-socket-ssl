@@ -1,18 +1,17 @@
-use v6;
 use Test;
 use IO::Socket::SSL;
 
 plan 2;
-
-my IO::Socket $ssl = IO::Socket::SSL.new(:host<github.com>, :port(443));
-isa-ok $ssl, IO::Socket::SSL, 'new 1/1';
-$ssl.close;
 
 unless %*ENV<NETWORK_TESTING> {
     diag "NETWORK_TESTING was not set";
     skip-rest("NETWORK_TESTING was not set");
     exit;
 }
+
+my IO::Socket $ssl = IO::Socket::SSL.new(:host<github.com>, :port(443));
+isa-ok $ssl, IO::Socket::SSL, 'new 1/1';
+$ssl.close;
 
 subtest {
     lives-ok { $ssl = IO::Socket::SSL.new(:host<google.com>, :port(443)) };
