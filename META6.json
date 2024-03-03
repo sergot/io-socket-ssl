@@ -5,7 +5,7 @@
     ],
     "description": "IO::Socket::SSL for Perl 6 using OpenSSL",
     "depends": [
-        "OpenSSL"
+        "IO::Socket::Async::SSL:ver<0.7.14>:auth<zef:jnthn>"
     ],
     "name": "IO::Socket::SSL",
     "perl": "6.*",

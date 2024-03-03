@@ -1,7 +1,7 @@
 unit class IO::Socket::SSL does IO::Socket;
 
-use OpenSSL;
-use OpenSSL::Err;
+use IO::Socket::Async::SSL;
+
 
 sub v4-split($uri) {
     $uri.split(':', 2);
@@ -22,89 +22,153 @@ has Int $.ins = 0;
 
 has $.client-socket;
 has $.listen-socket;
-has $.accepted-socket;
-has $!socket;
-has OpenSSL $.ssl;
 
-method new(*%args is copy) {
-    fail "Nothing given for new socket to connect or bind to" unless %args<host>
-                                                                  || %args<listen>
-                                                                  || %args<client-socket>
-                                                                  || %args<accepted-socket>
-                                                                  || %args<listen-socket>;
+has $!con-tap;
+has Lock $!con-lock;
+has $!con-lock-cond;
+has $!next-con;
 
-    if %args<host> {
-        my ($host, $port) = %args<family> && %args<family> == PIO::PF_INET6()
-            ?? v6-split(%args<host>)
-            !! v4-split(%args<host>);
-        if $port {
-            %args<port> //= $port;
-            %args<host> = $host;
+has IO::Socket::Async::SSL $!async is built;
+has $!in-tap;
+has Lock $!in-lock;
+has $!in-lock-cond;
+constant max-in-buf-size = 1048576; # 2^21
+has Buf $!in-buf;
+
+# TODO:
+# IO::Socket has $.nl-in and $.nl-out instead of $.input-line-separator. Support both.
+
+method TWEAK(*%args) {
+    unless $!async {
+        if %args<host> {
+            my ($host, $port) = %args<family> && %args<family> == PIO::PF_INET6()
+                ?? v6-split(%args<host>)
+                !! v4-split(%args<host>);
+            if $port {
+                $!port //= $port;
+                $!host = $host;
+            }
+        }
+        if %args<localhost> {
+            my ($peer, $port) = %args<family> && %args<family> == PIO::PF_INET6()
+                ?? v6-split(%args<localhost>)
+                !! v4-split(%args<localhost>);
+            if $port {
+                $!localport //= $port;
+                $!localhost = $peer;
+            }
+        }
+
+        $!listening = True if %args<listen>:exists;
+        %args<enc> = %args<encoding> if %args<encoding>:exists;
+
+        if !$!listening && $!host && $!port {
+            $!async = await IO::Socket::Async::SSL.connect(
+                $!host,
+                $!port,
+                |%args
+            );
+        }
+        elsif $!listening && $!localhost && $!localport {
+            $!con-lock .= new;
+            my $con-supply = IO::Socket::Async::SSL.listen(
+                $!localhost,
+                $!localport,
+                |%args
+            );
+            $!con-tap = $con-supply.tap: -> $v {
+                $!con-lock.protect: {
+                    $!next-con = $v;
+                    $!con-lock-cond.signal;
+                }
+            };
+        }
+        elsif $!client-socket {
+            # TODO
+        }
+        elsif $!listen-socket {
+            # TODO
+        }
+        else {
+            fail "Nothing given for new socket to connect or bind to"
         }
     }
-    if %args<localhost> {
-        my ($peer, $port) = %args<family> && %args<family> == PIO::PF_INET6()
-            ?? v6-split(%args<localhost>)
-            !! v4-split(%args<localhost>);
-        if $port {
-            %args<localport> //= $port;
-            %args<localhost> = $peer;
+
+    if $!async {
+        $!in-lock .= new;
+        $!in-lock-cond = $!in-lock.condition;
+        $!in-buf .= new;
+        $!in-tap = $!async.Supply(:bin).tap: -> $data is copy {
+            $!in-lock.protect: {
+                if $!in-buf.elems == max-in-buf-size {
+                    $!in-lock-cond.wait({ $!in-buf.elems < max-in-buf-size });
+                }
+                loop {
+                    if $!in-buf.elems + $data.elems > max-in-buf-size {
+                        my $allowed = max-in-buf-size - $!in-buf.elems;
+                        $!in-buf.elems.append($data.subbuf(0, $allowed));
+                        $data .= subbuf($allowed);
+                        $!in-lock-cond.wait({ $!in-buf.elems < max-in-buf-size });
+                    }
+                    else {
+                        $!in-buf.append($data);
+                        $!in-lock-cond.signal;
+                        last;
+                    }
+                }
+            }
+        },
+        done => { $!in-tap = Nil },
+        quit => -> $ex {
+            $!in-tap = Nil;
+            $ex.throw
         }
     }
-
-    %args<listening>.=Bool if %args.EXISTS-KEY('listen');
-
-    self.bless(|%args)!initialize;
 }
 
-method !initialize {
-    if $!client-socket || ($!host && $!port) {
-        # client stuff
-        $!socket = $!client-socket || IO::Socket::INET.new(:host($!host), :port($!port));
-
-        # handle errors
-        $!ssl = OpenSSL.new(:client);
-        $!ssl.set-socket($!socket);
-        $!ssl.set-connect-state;
-        my $ret = $!ssl.connect;
-        if $ret < 0 {
-            my $e = OpenSSL::Err::ERR_get_error();
-            repeat {
-                say "err code: $e";
-                say OpenSSL::Err::ERR_error_string($e, Str);
-               $e = OpenSSL::Err::ERR_get_error();
-            } while $e != 0 && $e != 4294967296;
+method recv(Int $n = 1048576, Bool :$bin = False, :$enc = 'utf-8') {
+    sub decode($data) {
+        if $bin {
+            $data
+        }
+        else {
+            my $norm-enc = Rakudo::Internals.NORMALIZE_ENCODING($enc);
+            my $dec = Encoding::Registry.find($norm-enc).decoder();
+            $dec.add-bytes($data);
+            $dec.consume-available-chars();
         }
     }
-    elsif $!accepted-socket {
-        $!socket = $!accepted-socket;
-        
-        $!ssl = OpenSSL.new();
-        $!ssl.set-socket($!socket);
-        $!ssl.set-accept-state;
-        
-        $!ssl.use-certificate-file($!certfile);
-        $!ssl.use-privatekey-file($!certfile);
-        $!ssl.check-private-key;
-        
-        my $ret = $!ssl.accept;
-        if $ret < 0 {
-            my $e = OpenSSL::Err::ERR_get_error();
-            repeat {
-                say "err code: $e";
-                say OpenSSL::Err::ERR_error_string($e);
-               $e = OpenSSL::Err::ERR_get_error();
-            } while $e != 0 && $e != 4294967296;
+    # Can't yet reliably return from within the `protect` block:
+    # https://github.com/Raku/problem-solving/issues/417
+    my $res;
+    $!in-lock.protect: {
+        loop {
+            if $!in-buf.elems > $n {
+                my $new-buf = $!in-buf.subbuf($n);
+                $!in-buf.reallocate($n);
+                my $data = $!in-buf;
+                $!in-buf = $new-buf;
+                $!in-lock-cond.signal;
+                $res = decode($data);
+                last
+            }
+            elsif $!in-buf.elems {
+                my $data = $!in-buf;
+                $!in-buf .= new;
+                $!in-lock-cond.signal;
+                $res = decode($data);
+                last
+            }
+            elsif !$!in-tap { # Connection has closed
+                $res = $!in-buf;
+                last
+            }
+            else {
+                $!in-lock-cond.wait({ $!in-buf.elems });
+            }
         }
     }
-    elsif $!listen-socket || $!listening {
-        $!socket = $!listen-socket || IO::Socket::INET.new(:localhost($!localhost), :localport($!localport), :listen);
-    }
-    self;
-}
-
-method recv(Int $n = 1048576, Bool :$bin = False) {
-    $!ssl.read($n, :$bin);
+    $res
 }
 
 method read(Int $n) {
@@ -118,19 +182,20 @@ method read(Int $n) {
 }
 
 method send(Str $s) {
-    $!ssl.write($s);
+    await $!async.print($s);
 }
 
 method print(Str $s) {
-    $!ssl.write($s);
+    my $res = await $!async.print($s);
+    $res
 }
 
 method put(Str $s) {
-    $!ssl.write($s ~ $.nl-out);
+    await $!async.print($s ~ $.nl-out);
 }
 
 method write(Blob $b) {
-    $!ssl.write($b);
+    await $!async.write($b);
 }
 
 method get() {
@@ -151,21 +216,28 @@ method get() {
     }
 }
 
-method accept {
-    my $newsock = $!socket.accept;
-    self.bless(:accepted-socket($newsock))!initialize;
+method accept(IO::Socket::SSL:D:) {
+    die "Not a server socket" unless $!listening;
+    my $new-con;
+    $!con-lock.protect: {
+        $!con-lock-cond.wait({ $!next-con });
+        $new-con = self.bless(async => $!next-con);
+        $!next-con = Nil;
+    }
+    $new-con
 }
 
-method close {
-    $!ssl.close;
-    $!socket.close;
+method close(IO::Socket::SSL:D:) {
+    .close with $!async;
+    .close with $!in-tap;
+    .close with $!con-tap;
 }
 
-method connect(Str() $host, Int() $port) {
+method connect(IO::Socket::SSL:U: Str() $host, Int() $port) {
     self.new(:$host, :$port)
 }
 
-method listen(Str() $localhost, Int() $localport) {
+method listen(IO::Socket::SSL:U: Str() $localhost, Int() $localport) {
     self.new(:$localhost, :$localport, :listen)
 }
 
