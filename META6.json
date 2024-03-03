@@ -19,10 +19,9 @@
         "source": "git://github.com/sergot/io-socket-ssl.git"
     },
     "tags": [
-        "SSL", "Sockets"
+        "TLS", "SSL", "Sockets"
     ],
     "test-depends": [
-        "Test"
     ],
     "version": "0.0.3"
 }
