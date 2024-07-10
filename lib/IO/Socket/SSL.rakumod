@@ -20,9 +20,6 @@ has Bool $.listening;
 has Str $.input-line-separator is rw = "\n";
 has Int $.ins = 0;
 
-has $.client-socket;
-has $.listen-socket;
-
 has $!con-tap;
 has Lock $!con-lock;
 has $!con-lock-cond;
@@ -82,12 +79,6 @@ method TWEAK(*%args) {
                     $!con-lock-cond.signal;
                 }
             };
-        }
-        elsif $!client-socket {
-            # TODO
-        }
-        elsif $!listen-socket {
-            # TODO
         }
         else {
             fail "Nothing given for new socket to connect or bind to"
