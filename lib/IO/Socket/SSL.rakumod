@@ -11,6 +11,21 @@ sub v6-split($uri) {
     $host ?? ($host, $port) !! $uri;
 }
 
+has Str $.encoding = 'utf8';
+# DIFF nl-in and nl-out added. Need to make these work.
+has $.nl-in is rw = ["\n", "\r\n"];
+has Str:D $.nl-out is rw = "\n";
+
+#DIFF implement family
+has ProtocolFamily:D $.family = PF_UNSPEC;
+
+#DIFF add type and proto. Hard code to STREAM and TCP. SSL can't work on anything else.
+has SocketType:D     $.type   = SOCK_STREAM;
+has ProtocolType:D   $.proto  = PROTO_TCP;
+
+#DIFF TCP protocol guts. Need to modify IO::Socket::Async::SSL to add support for this. IO::Socket::Async.listen already supports it.
+has Int $.backlog;
+
 has Str $.host;
 has Int $.port = 443;
 has Str $.localhost;
@@ -117,7 +132,9 @@ method TWEAK(*%args) {
     }
 }
 
-method recv(Int $n = 1048576, Bool :$bin = False, :$enc = 'utf-8') {
+# DIFF Limit in IO::Socket is 65535
+# DIFF added optional :$enc
+method recv(Cool $limit = 1048576, Bool :$bin = False, :$enc = 'utf-8') {
     sub decode($data) {
         if $bin {
             $data
@@ -134,9 +151,9 @@ method recv(Int $n = 1048576, Bool :$bin = False, :$enc = 'utf-8') {
     my $res;
     $!in-lock.protect: {
         loop {
-            if $!in-buf.elems > $n {
-                my $new-buf = $!in-buf.subbuf($n);
-                $!in-buf.reallocate($n);
+            if $!in-buf.elems > $limit {
+                my $new-buf = $!in-buf.subbuf($limit);
+                $!in-buf.reallocate($limit);
                 my $data = $!in-buf;
                 $!in-buf = $new-buf;
                 $!in-lock-cond.signal;
@@ -162,31 +179,14 @@ method recv(Int $n = 1048576, Bool :$bin = False, :$enc = 'utf-8') {
     $res
 }
 
-method read(Int $n) {
+method read(Int(Cool) $bufsize) {
     my $res = buf8.new;
     my $buf;
     repeat {
-        $buf = self.recv($n - $res.elems, :bin);
+        $buf = self.recv($bufsize - $res.elems, :bin);
         $res ~= $buf;
-    } while $res.elems < $n && $buf.elems;
+    } while $res.elems < $bufsize && $buf.elems;
     $res;
-}
-
-method send(Str $s) {
-    await $!async.print($s);
-}
-
-method print(Str $s) {
-    my $res = await $!async.print($s);
-    $res
-}
-
-method put(Str $s) {
-    await $!async.print($s ~ $.nl-out);
-}
-
-method write(Blob $b) {
-    await $!async.write($b);
 }
 
 method get() {
@@ -207,6 +207,43 @@ method get() {
     }
 }
 
+#DIFF lines()
+method lines() {
+}
+
+method print(Str(Cool) $s --> Int) {
+    await $!async.print($s)
+}
+
+method put(Str(Cool) $s --> Int) {
+    await $!async.print($s ~ $.nl-out)
+}
+
+method write(Blob:D $buf --> Int) {
+    await $!async.write($buf)
+}
+
+#DIFF send() missing. Remove?
+method send(Str $s) {
+    await $!async.print($s)
+}
+
+method close(IO::Socket::SSL:D:) {
+    .close with $!async;
+    .close with $!in-tap;
+    .close with $!con-tap;
+}
+
+#DIFF missing param $family - Can we replicate that?
+method connect(IO::Socket::SSL:U: Str() $host, Int() $port) {
+    self.new(:$host, :$port)
+}
+
+#DIFF missing param $family - Can we replicate that?
+method listen(IO::Socket::SSL:U: Str() $localhost, Int() $localport) {
+    self.new(:$localhost, :$localport, :listen)
+}
+
 method accept(IO::Socket::SSL:D:) {
     die "Not a server socket" unless $!listening;
     my $new-con;
@@ -216,20 +253,6 @@ method accept(IO::Socket::SSL:D:) {
         $!next-con = Nil;
     }
     $new-con
-}
-
-method close(IO::Socket::SSL:D:) {
-    .close with $!async;
-    .close with $!in-tap;
-    .close with $!con-tap;
-}
-
-method connect(IO::Socket::SSL:U: Str() $host, Int() $port) {
-    self.new(:$host, :$port)
-}
-
-method listen(IO::Socket::SSL:U: Str() $localhost, Int() $localport) {
-    self.new(:$localhost, :$localport, :listen)
 }
 
 =begin pod
