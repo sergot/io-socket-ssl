@@ -12,16 +12,13 @@ sub v6-split($uri) {
 }
 
 has Str $.encoding = 'utf8';
-# DIFF nl-in and nl-out added. Need to make these work.
 has $.nl-in is rw = ["\n", "\r\n"];
 has Str:D $.nl-out is rw = "\n";
 
-#DIFF implement family
 has ProtocolFamily:D $.family = PF_UNSPEC;
 
-#DIFF add type and proto. Hard code to STREAM and TCP. SSL can't work on anything else.
-has SocketType:D     $.type   = SOCK_STREAM;
-has ProtocolType:D   $.proto  = PROTO_TCP;
+has SocketType:D   $.type  = SOCK_STREAM is built(False);
+has ProtocolType:D $.proto = PROTO_TCP   is built(False);
 
 #DIFF TCP protocol guts. Need to modify IO::Socket::Async::SSL to add support for this. IO::Socket::Async.listen already supports it.
 has Int $.backlog;
@@ -32,7 +29,6 @@ has Str $.localhost;
 has Int $.localport;
 has Str $.certfile;
 has Bool $.listening;
-has Str $.input-line-separator is rw = "\n";
 has Int $.ins = 0;
 
 has $!con-tap;
@@ -47,9 +43,15 @@ has $!in-lock-cond;
 constant max-in-buf-size = 1048576; # 2^21
 has Buf $!in-buf;
 
-# TODO:
-# IO::Socket has $.nl-in and $.nl-out instead of $.input-line-separator. Support both.
+has Encoding::Decoder $!decoder;
+has Encoding::Encoder $!encoder;
 
+method new() {
+    die "Cannot create an IO::Socket::SSL::Via::Async object directly; please use\n" ~
+        "IO::Socket::SSL::Via::Async.connect or IO::Socket::SSL::Via::Async.listen";
+}
+
+# TODO: syncronize this with IO:Socket::Async::SSL.
 method TWEAK(*%args) {
     unless $!async {
         if %args<host> {
@@ -72,7 +74,6 @@ method TWEAK(*%args) {
         }
 
         $!listening = True if %args<listen>:exists;
-        %args<enc> = %args<encoding> if %args<encoding>:exists;
 
         if !$!listening && $!host && $!port {
             $!async = await IO::Socket::Async::SSL.connect(
@@ -132,22 +133,22 @@ method TWEAK(*%args) {
     }
 }
 
-# DIFF Limit in IO::Socket is 65535
-# DIFF added optional :$enc
-method recv(Cool $limit = 1048576, Bool :$bin = False, :$enc = 'utf-8') {
-    sub decode($data) {
-        if $bin {
-            $data
-        }
-        else {
-            my $norm-enc = Rakudo::Internals.NORMALIZE_ENCODING($enc);
-            my $dec = Encoding::Registry.find($norm-enc).decoder();
-            $dec.add-bytes($data);
-            $dec.consume-available-chars();
-        }
+method !ensure-decoder(--> Nil) {
+    unless $!decoder.DEFINITE {
+        my $encoding = Encoding::Registry.find($!encoding);
+        $!decoder := $encoding.decoder();
+        $!decoder.set-line-separators($!nl-in.list);
     }
-    # Can't yet reliably return from within the `protect` block:
-    # https://github.com/Raku/problem-solving/issues/417
+}
+
+method !ensure-encoder(--> Nil) {
+    unless $!encoder.DEFINITE {
+        my $encoding = Encoding::Registry.find($!encoding);
+        $!encoder := $encoding.encoder();
+    }
+}
+
+method !pull-bytes-from-async(Int $limit) {
     my $res;
     $!in-lock.protect: {
         loop {
@@ -157,14 +158,14 @@ method recv(Cool $limit = 1048576, Bool :$bin = False, :$enc = 'utf-8') {
                 my $data = $!in-buf;
                 $!in-buf = $new-buf;
                 $!in-lock-cond.signal;
-                $res = decode($data);
+                $res = $data;
                 last
             }
             elsif $!in-buf.elems {
                 my $data = $!in-buf;
                 $!in-buf .= new;
                 $!in-lock-cond.signal;
-                $res = decode($data);
+                $res = $data;
                 last
             }
             elsif !$!in-tap { # Connection has closed
@@ -179,69 +180,127 @@ method recv(Cool $limit = 1048576, Bool :$bin = False, :$enc = 'utf-8') {
     $res
 }
 
-method read(Int(Cool) $bufsize) {
-    my $res = buf8.new;
-    my $buf;
-    repeat {
-        $buf = self.recv($bufsize - $res.elems, :bin);
-        $res ~= $buf;
-    } while $res.elems < $bufsize && $buf.elems;
-    $res;
+method !feed-decoder(Int $limit) {
+    my $bytes = self!pull-bytes-from-async($limit);
+    $!decoder.add-bytes($bytes);
 }
 
-method get() {
-    my $buf = buf8.new;
-    my $nl-bytes = $.input-line-separator.encode.bytes;
-    loop {
-        my $more = self.recv(1, :bin);
-        if !$more {
-            return Str unless $buf.bytes;
-            return $buf.decode;
-        }
-        $buf ~= $more;
-        next unless $buf.bytes >= $nl-bytes;
-
-        if $buf.subbuf($buf.bytes - $nl-bytes, $nl-bytes).decode('latin-1') eq $.input-line-separator {
-            return $buf.subbuf(0, $buf.bytes - $nl-bytes).decode;
-        }
+method !pull-bytes(Int $limit) {
+    if $!decoder.DEFINITE {
+        $!decoder.consume-exactly-bytes($limit)
+            // self!pull-bytes-from-async($limit)
+    }
+    else {
+        self!pull-bytes-from-async($limit)
     }
 }
 
-#DIFF lines()
+method nl-in is rw {
+    Proxy.new(
+        FETCH => { $!nl-in },
+        STORE => -> $, $nl-in {
+            $!nl-in = $nl-in;
+            with $!decoder {
+                .set-line-separators($!nl-in.list);
+            }
+            $nl-in
+        }
+    )
+}
+
+# DIFF Limit in IO::Socket is 65535
+method recv(Cool $limit = 1048576, Bool :$bin = False) {
+    fail('Socket not available') unless $!async;
+    if $bin {
+        self!pull-bytes($limit)
+    }
+    else {
+        self!ensure-decoder();
+        my $result = $!decoder.consume-exactly-chars($limit);
+        without $result {
+            self!feed-decoder(65535);
+            $result = $!decoder.consume-exactly-chars($limit);
+            without $result {
+                $result = $!decoder.consume-all-chars();
+            }
+        }
+        $result
+    }
+}
+
+method read(Int(Cool) $bufsize) {
+    fail('Socket not available') unless $!async;
+    my int $toread = $bufsize;
+
+    my $res := self!pull-bytes($toread);
+
+    while nqp::elems($res) < $toread {
+        my $buf := self!pull-bytes($toread - nqp::elems($res));
+        nqp::elems($buf)
+          ?? $res.append($buf)
+          !! return $res
+    }
+    $res
+}
+
+method get() {
+    self!ensure-decoder();
+    my Str $line = $!decoder.consume-line-chars(:chomp);
+    if $line.DEFINITE {
+        $line
+    }
+    else {
+        loop {
+            self!feed-decoder(65535);
+            $line = $!decoder.consume-line-chars(:chomp);
+            last if $line.DEFINITE;
+            if $read == 0 {
+                $line = $!decoder.consume-line-chars(:chomp, :eof)
+                    unless $!decoder.is-empty;
+                last;
+            }
+        }
+        $line.DEFINITE ?? $line !! Nil
+    }
+}
+
 method lines() {
+    gather while (my $line = self.get()).DEFINITE {
+        take $line;
+    }
 }
 
 method print(Str(Cool) $s --> Int) {
-    await $!async.print($s)
+    self!ensure-encoder();
+    self.write($!encoder.encode-chars($string));
 }
 
-method put(Str(Cool) $s --> Int) {
-    await $!async.print($s ~ $.nl-out)
+method put(Str(Cool) $string --> Int) {
+    self.print($string ~ $!nl-out);
 }
 
 method write(Blob:D $buf --> Int) {
+    fail('Socket not available') unless $!async;
     await $!async.write($buf)
 }
 
-#DIFF send() missing. Remove?
-method send(Str $s) {
-    await $!async.print($s)
-}
-
 method close(IO::Socket::SSL:D:) {
+    fail("Not connected!") unless $!async;
     .close with $!async;
     .close with $!in-tap;
     .close with $!con-tap;
 }
 
-#DIFF missing param $family - Can we replicate that?
-method connect(IO::Socket::SSL:U: Str() $host, Int() $port) {
-    self.new(:$host, :$port)
+method native-descriptor(::?CLASS:D:) {
+    fail("Not available on IO::Socket::SSL::Via::Async");
 }
 
-#DIFF missing param $family - Can we replicate that?
-method listen(IO::Socket::SSL:U: Str() $localhost, Int() $localport) {
-    self.new(:$localhost, :$localport, :listen)
+method connect(IO::Socket::SSL:U: Str() $host, Int() $port, ProtocolFamily:D(Int:D) :$family = PF_UNSPEC) {
+    self.new(:$host, :$port, :$family)
+}
+
+method listen(IO::Socket::SSL:U: Str() $localhost, Int() $localport, ProtocolFamily:D(Int:D) :$family = PF_UNSPEC) {
+    self.new(:$localhost, :$localport, :$family, :listen)
 }
 
 method accept(IO::Socket::SSL:D:) {
@@ -259,11 +318,11 @@ method accept(IO::Socket::SSL:D:) {
 
 =head1 NAME
 
-IO::Socket::SSL - interface for SSL connection
+IO::Socket::SSL::Via::Async - Interface for TLS connections
 
 =head1 SYNOPSIS
 
-    use IO::Socket::SSL;
+    use IO::Socket::SSL::Via::Async;
     my $ssl = IO::Socket::SSL.new(:host<example.com>, :port(443));
     if $ssl.print("GET / HTTP/1.1\r\n\r\n") {
         say $ssl.recv;
@@ -284,7 +343,6 @@ It uses C to setting up the connection so far (hope it will change soon).
 Gets params like:
 
 =item encoding             : connection's encoding
-=item input-line-separator : specifies how lines of input are separated
 
 for client state:
 =item host : host to connect
