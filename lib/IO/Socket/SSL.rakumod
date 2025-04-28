@@ -27,11 +27,12 @@ has $!socket;
 has OpenSSL $.ssl;
 
 method new(*%args is copy) {
-    fail "Nothing given for new socket to connect or bind to" unless %args<host>
-                                                                  || %args<listen>
-                                                                  || %args<client-socket>
-                                                                  || %args<accepted-socket>
-                                                                  || %args<listen-socket>;
+    fail "Nothing given for new socket to connect or bind to"
+      unless %args<host>
+        || %args<listen>
+        || %args<client-socket>
+        || %args<accepted-socket>
+        || %args<listen-socket>;
 
     if %args<host> {
         my ($host, $port) = %args<family> && %args<family> == PIO::PF_INET6()
@@ -42,17 +43,17 @@ method new(*%args is copy) {
             %args<host> = $host;
         }
     }
-    if %args<localhost> {
+    if %args<localhost> -> $localhost {
         my ($peer, $port) = %args<family> && %args<family> == PIO::PF_INET6()
-            ?? v6-split(%args<localhost>)
-            !! v4-split(%args<localhost>);
+            ?? v6-split($localhost)
+            !! v4-split($localhost);
         if $port {
             %args<localport> //= $port;
             %args<localhost> = $peer;
         }
     }
 
-    %args<listening>.=Bool if %args.EXISTS-KEY('listen');
+    %args<listening> .= Bool if %args.EXISTS-KEY('listen');
 
     self.bless(|%args)!initialize;
 }
@@ -98,13 +99,14 @@ method !initialize {
         }
     }
     elsif $!listen-socket || $!listening {
-        $!socket = $!listen-socket || IO::Socket::INET.new(:localhost($!localhost), :localport($!localport), :listen);
+        $!socket = $!listen-socket
+          || IO::Socket::INET.new(:$!localhost, :$!localport, :listen);
     }
-    self;
+    self
 }
 
 method recv(Int $n = 1048576, Bool :$bin = False) {
-    $!ssl.read($n, :$bin);
+    $!ssl.read($n, :$bin)
 }
 
 method read(Int $n) {
@@ -114,24 +116,13 @@ method read(Int $n) {
         $buf = self.recv($n - $res.elems, :bin);
         $res ~= $buf;
     } while $res.elems < $n && $buf.elems;
-    $res;
+    $res
 }
 
-method send(Str $s) {
-    $!ssl.write($s);
-}
-
-method print(Str $s) {
-    $!ssl.write($s);
-}
-
-method put(Str $s) {
-    $!ssl.write($s ~ $.nl-out);
-}
-
-method write(Blob $b) {
-    $!ssl.write($b);
-}
+method send(Str $s)   { $!ssl.write($s)            }
+method print(Str $s)  { $!ssl.write($s)            }
+method put(Str $s)    { $!ssl.write($s ~ $.nl-out) }
+method write(Blob $b) { $!ssl.write($b)            }
 
 method get() {
     my $buf = buf8.new;
@@ -152,8 +143,8 @@ method get() {
 }
 
 method accept {
-    my $newsock = $!socket.accept;
-    self.bless(:accepted-socket($newsock))!initialize;
+    my $accepted-socket := $!socket.accept;
+    self.bless(:$accepted-socket)!initialize;
 }
 
 method close {
@@ -169,94 +160,4 @@ method listen(Str() $localhost, Int() $localport) {
     self.new(:$localhost, :$localport, :listen)
 }
 
-=begin pod
-
-=head1 NAME
-
-IO::Socket::SSL - interface for SSL connection
-
-=head1 SYNOPSIS
-
-    use IO::Socket::SSL;
-    my $ssl = IO::Socket::SSL.new(:host<example.com>, :port(443));
-    if $ssl.print("GET / HTTP/1.1\r\n\r\n") {
-        say $ssl.recv;
-    }
-
-=head1 DESCRIPTION
-
-This module provides an interface for SSL connections.
-
-It uses C to setting up the connection so far (hope it will change soon).
-
-=head1 METHODS
-
-=head2 method new
-
-    method new(*%params) returns IO::Socket::SSL
-
-Gets params like:
-
-=item encoding             : connection's encoding
-=item input-line-separator : specifies how lines of input are separated
-
-for client state:
-=item host : host to connect
-=item port : port to connect
-
-for server state:
-=item localhost : host to use for the server
-=item localport : port for the server
-=item listen    : create a server and listen for a new incoming connection
-=item certfile  : path to a file with certificates
-
-=head2 method recv
-
-    method recv(IO::Socket::SSL:, Int $n = 1048576, Bool :$bin = False)
-
-Reads $n bytes from the other side (server/client).
-
-Bool :$bin if we want it to return Buf instead of Str.
-
-=head2 method print
-
-    method print(IO::Socket::SSL:, Str $s)
-
-=head2 method send
-
-    DEPRECATED. Use `.print` instead
-
-    method send(IO::Socket::SSL:, Str $s)
-
-Sends $s to the other side (server/client).
-
-=head2 method accept
-
-    method accept(IO::Socket::SSL:)
-
-Waits for a new incoming connection and accepts it.
-
-=head2 close
-
-    method close(IO::Socket::SSL:)
-
-Closes the connection.
-
-=head1 SEE ALSO
-
-L<OpenSSL>
-
-=head1 EXAMPLE
-
-To download sourcecode of e.g. github.com:
-
-    use IO::Socket::SSL;
-    my $ssl = IO::Socket::SSL.new(:host<github.com>, :port(443));
-    my $content = Buf.new;
-    $ssl.print("GET /\r\n\r\n");
-    while my $read = $ssl.recv {
-        $content ~= $read;
-    }
-    say $content;
-
-=end pod
+# vim: expandtab shiftwidth=4

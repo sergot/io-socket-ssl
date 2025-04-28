@@ -1,0 +1,3 @@
+.precomp/
+/IO-Socket-SSL-*
+*.rakucov

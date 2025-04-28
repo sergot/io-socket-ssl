@@ -1,0 +1,4 @@
+Revision history for IO::Socket::SSL
+
+{{$NEXT}}
+    - Initial version as a Raku Community module

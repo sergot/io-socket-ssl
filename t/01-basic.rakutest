@@ -1,4 +1,3 @@
-use v6;
 use Test;
 use IO::Socket::SSL;
 
@@ -21,4 +20,4 @@ subtest {
     $ssl.close;
 }, 'google: ssl';
 
-done-testing;
+# vim: expandtab shiftwidth=4
